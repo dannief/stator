@@ -243,7 +243,8 @@ const store = {
     store._middleware = next
   },
   _applyNextMiddleware: function(middleware_function, next) {
-    return (key, oldVal, store) => middleware_function(next, key, oldVal, store)
+    return (key, new_value_or_updater, store) =>
+      middleware_function(next, key, new_value_or_updater, store)
   },
   /**
    * Emit event to subscribers based on timeout rules
