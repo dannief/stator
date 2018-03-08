@@ -243,7 +243,7 @@ const store = {
     store._middleware = next
   },
   _applyNextMiddleware: function(middleware_function, next) {
-    return (key, new_value_or_updater, store) =>
+    return (key, new_value_or_updater) =>
       middleware_function(next, key, new_value_or_updater, store)
   },
   /**
