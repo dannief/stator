@@ -158,10 +158,10 @@ const store = {
   /**
    * set key or keys of store object
    * @param {str/obj} key_or_new_store: if str, this key is replaced. If obj, all keys of the obj replace store's keys.
-   * @param {any} value: If key was provided, the associated value. The type of the value for this key cannot change. Exceptions to this rule
+   * @param {any} value_or_updator: If key was provided, the associated value or a function that accepts the current value and the new value. The type of the value for this key cannot change. Exceptions to this rule
    * are to/from null or undefined. Otherwise if you try to change, say, `1` to `'2'`, a type error will occur (int to string is not permitted).
    */
-  set: function(key_or_new_store, value) {
+  set: function(key_or_new_store, value_or_updater) {
     if (arguments.length === 1) {
       // replace the whole store
       let new_store = key_or_new_store
@@ -177,17 +177,38 @@ const store = {
       throw `cannot create new key after initialization (attempted to create ${key})`
     }
 
+    // Call middleware function
+    if (store._middleware) {
+      store._middleware(key, value_or_updater, store)
+    } else {
+      store._set(key, value_or_updater)
+    }
+  },
+  /**
+   * Sets the value in the store and call post processing middleware function
+   * Called as the last middleware function
+   */
+  _set: function(key, value_or_updater) {
     let oldval = store._store[key]
+
+    let value = value_or_updater
+
+    if (isFunction(value_or_updater)) {
+      let update_state = value_or_updater
+      value = update_state(store.get(key))
+    }
+
     checkTypeMatch(key, oldval, value)
     if (valueHasChanged(oldval, value)) {
-      let update_store = store._runUserMiddleware(key, oldval, value)
+      let update_store = store._runUserPreUpdateMiddleware(key, oldval, value)
       if (update_store) {
         store._store[key] = value
         store._publishChangeToSubscribers(key, oldval, value)
       }
     }
   },
-  _user_middleware_functions: [],
+  /** list of middleware functiona that are called just before store is updated */
+  _user_pre_update_middleware_functions: [],
   /**
    * use a middleware function
    * function signature of middleware is function(key, oldval, newval).
@@ -195,11 +216,15 @@ const store = {
    * otherwise, the middleware chain will stop and the store will NOT be updated.
    */
   use: function(new_middlware_function) {
-    store._user_middleware_functions.push(new_middlware_function)
+    if (new_middlware_function > 3) {
+      store._user_middleware_functions.push(new_middlware_function)
+    } else {
+      store._user_pre_update_middleware_functions.push(new_middlware_function)
+    }
   },
-  _runUserMiddleware: function(key, oldval, newval) {
-    if (store._user_middleware_functions.length) {
-      for (let middleware_function of store._user_middleware_functions) {
+  _runUserPreUpdateMiddleware: function(key, oldval, newval) {
+    if (store._user_pre_update_middleware_functions.length) {
+      for (let middleware_function of store._user_pre_update_middleware_functions) {
         let keep_going = middleware_function(key, oldval, newval)
         if (!keep_going) {
           return false
@@ -207,6 +232,18 @@ const store = {
       }
     }
     return true
+  },
+  _middleware: null,
+  applyMiddleware: function(...middleware_functions) {
+    let next = store._set
+    for (var i = middleware_functions.length - 1; i >= 0; i--) {
+      next = store._applyNextMiddleware(middleware_functions[i], next)
+    }
+
+    store._middleware = next
+  },
+  _applyNextMiddleware: function(middleware_function, next) {
+    return (key, oldVal, store) => middleware_function(next, key, oldVal, store)
   },
   /**
    * Emit event to subscribers based on timeout rules
@@ -418,6 +455,10 @@ function shallowEqual(objA, objB) {
   }
 
   return true
+}
+
+function isFunction(x) {
+  return Object.prototype.toString.call(x) == '[object Function]'
 }
 
 module.exports = {
