@@ -8,7 +8,7 @@ afterEach(() => {
   store._key_to_watcher_subscriptions = {}
   store._callback_objs = []
   store._cur_callback_id = 0
-  store._middleware = null
+  store._pipeline_middleware = null
   store._user_pre_update_middleware_functions = []
 })
 
@@ -66,14 +66,19 @@ test('subscribe and unsubscribe', () => {
   expect(v).toBe(false) // but we weren't notified
 })
 
-test('pre-update middleware is called', () => {
+test('pre-update middlewares are called', () => {
   store.initialize({a: 0, b: 0})
 
-  store.use(function(key, oldval, newval) {
-    if (key === 'b') {
-      throw 'using pre-update middleware'
+  store.use(
+    function(key, oldVal, newVal) {
+      return true
+    },
+    function(key, oldval, newval) {
+      if (key === 'b') {
+        throw 'using pre-update middleware'
+      }
     }
-  })
+  )
 
   store.set({a: 1}) // nothing thrown
 
@@ -82,31 +87,40 @@ test('pre-update middleware is called', () => {
   }).toThrow('using pre-update middleware')
 })
 
-test('middleware is called', () => {
+test('pipeline middlewares are called', () => {
   store.initialize({a: 0, b: 0})
 
-  store.applyMiddleware(function(next, key, oldval, theStore) {
-    if (key === 'b') {
-      throw 'using middleware'
+  store.apply(
+    function(next, key, valOrUpdator, theStore) {
+      try {
+        next(key, valOrUpdator)
+      } catch (err) {
+        throw 'caught error: ' + err
+      }
+    },
+    function(next, key, valOrUpdator, theStore) {
+      if (key === 'b') {
+        throw 'using middleware'
+      }
     }
-  })
+  )
 
   store.set({a: 1}) // nothing thrown
 
   expect(() => {
     store.set({b: 1})
-  }).toThrow('using middleware')
+  }).toThrow('caught error: using middleware')
 })
 
-test('middleware chain', () => {
+test('pipeline middlewares can update value', () => {
   store.initialize({a: 0, b: 0})
 
-  store.applyMiddleware(
-    function(next, key, oldVal, theStore) {
-      next(key, oldVal + 1, theStore)
+  store.apply(
+    function(next, key, val, theStore) {
+      next(key, val + 1, theStore)
     },
-    function(next, key, oldVal, theStore) {
-      next(key, oldVal + 1, theStore)
+    function(next, key, val, theStore) {
+      next(key, val + 1, theStore)
     }
   )
 

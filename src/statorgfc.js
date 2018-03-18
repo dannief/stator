@@ -158,7 +158,7 @@ const store = {
   /**
    * set key or keys of store object
    * @param {str/obj} key_or_new_store: if str, this key is replaced. If obj, all keys of the obj replace store's keys.
-   * @param {any} value_or_updator: If key was provided, the associated value or a function that accepts the current value and the new value. The type of the value for this key cannot change. Exceptions to this rule
+   * @param {any} value_or_updator: If key was provided, the associated value or a function that accepts the current value and returns the new value. The type of the value for this key cannot change. Exceptions to this rule
    * are to/from null or undefined. Otherwise if you try to change, say, `1` to `'2'`, a type error will occur (int to string is not permitted).
    */
   set: function(key_or_new_store, value_or_updater) {
@@ -178,14 +178,14 @@ const store = {
     }
 
     // Call middleware function
-    if (store._middleware) {
-      store._middleware(key, value_or_updater, store)
+    if (store._pipeline_middleware) {
+      store._pipeline_middleware(key, value_or_updater, store)
     } else {
       store._set(key, value_or_updater)
     }
   },
   /**
-   * Sets the value in the store and call post processing middleware function
+   * Sets the value in the store and call pre-update middleware functions
    * Called as the last middleware function
    */
   _set: function(key, value_or_updater) {
@@ -210,17 +210,13 @@ const store = {
   /** list of middleware functiona that are called just before store is updated */
   _user_pre_update_middleware_functions: [],
   /**
-   * use a middleware function
-   * function signature of middleware is function(key, oldval, newval).
+   * Set of middleware functions that get exececuted just before a the state is updated
+   * Function signature of middleware is function(key, oldval, newval).
    * If middleware functions returns true, next middleware function will run
    * otherwise, the middleware chain will stop and the store will NOT be updated.
    */
-  use: function(new_middlware_function) {
-    if (new_middlware_function > 3) {
-      store._user_middleware_functions.push(new_middlware_function)
-    } else {
-      store._user_pre_update_middleware_functions.push(new_middlware_function)
-    }
+  use: function(...middlware_functions) {
+    store._user_pre_update_middleware_functions.push(...middlware_functions)
   },
   _runUserPreUpdateMiddleware: function(key, oldval, newval) {
     if (store._user_pre_update_middleware_functions.length) {
@@ -233,14 +229,23 @@ const store = {
     }
     return true
   },
-  _middleware: null,
-  applyMiddleware: function(...middleware_functions) {
+  _pipeline_middleware: null,
+  /**
+   * Set of middleware functions that get weaved into the state update pipeline
+   * Function signature is function(next, key, newValOrUpdator, store)
+   * The next middleware in the pipeline may be executing by invoking the next function or
+   * pipeline may be stopped by not calling the next function.
+   * The next function has the signature next(key, new_value_or_updator)
+   * Pipeline middleware functions allow the state value to modified prior to update
+   * or some effect to be invoked before or after update
+   */
+  apply: function(...middleware_functions) {
     let next = store._set
     for (var i = middleware_functions.length - 1; i >= 0; i--) {
       next = store._applyNextMiddleware(middleware_functions[i], next)
     }
 
-    store._middleware = next
+    store._pipeline_middleware = next
   },
   _applyNextMiddleware: function(middleware_function, next) {
     return (key, new_value_or_updater) =>
