@@ -285,7 +285,7 @@ store.set('key', 5) // "key 0 -> 5" "aborting!". store is not updated.
 
 ### apply
 
-Apply a middleware pipeline function. These functions wrap functionality that set state, allowing code to be executed before and/or after the state is updated. These functions allow greater flexibility than the 'use' middleware. Foe example the value to be set may be modified before update
+Apply a middleware pipeline function. These functions wrap functionality that set state, allowing code to be executed before and/or after the state is updated. These functions allow greater flexibility than the 'use' middleware functions. For example, the value to be set may be modified before update is applied
 
 ```js
 function logChanged(next, key, val, store) {
