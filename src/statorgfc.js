@@ -2,6 +2,8 @@
  * statorgfc - global state mangement for JavaScript apps. Copyright Chad Smith.
  */
 import {middleware} from './middleware'
+import {pipeline} from './pipeline-middleware'
+import {createComponents} from './ui'
 
 const store = {
   /**
@@ -468,6 +470,8 @@ function isFunction(x) {
 }
 
 module.exports = {
-  store: store,
-  middleware: middleware,
+  store,
+  middleware,
+  pipeline,
+  ...createComponents(store),
 }
