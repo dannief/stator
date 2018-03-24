@@ -12,7 +12,7 @@ afterEach(() => {
   store._user_pre_update_middleware_functions = []
 })
 
-test('updates are deeply immutable', () => {
+test('ensureImmutableUpdate: updates are deeply immutable', () => {
   store.initialize(
     {
       person: {

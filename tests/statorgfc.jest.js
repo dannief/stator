@@ -117,10 +117,10 @@ test('pipeline middlewares can update value', () => {
 
   store.apply(
     function(next, key, val, theStore) {
-      next(key, val + 1, theStore)
+      next(key, val + 1)
     },
     function(next, key, val, theStore) {
-      next(key, val + 1, theStore)
+      next(key, val + 1)
     }
   )
 
