@@ -7,6 +7,10 @@ var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol
 
 var _middleware = require('./middleware');
 
+var _pipelineMiddleware = require('./pipeline-middleware');
+
+var _ui = require('./ui');
+
 var store = {
   /**
    * the store's options
@@ -210,10 +214,10 @@ var store = {
   /**
    * set key or keys of store object
    * @param {str/obj} key_or_new_store: if str, this key is replaced. If obj, all keys of the obj replace store's keys.
-   * @param {any} value: If key was provided, the associated value. The type of the value for this key cannot change. Exceptions to this rule
+   * @param {any} value_or_updator: If key was provided, the associated value or a function that accepts the current value and returns the new value. The type of the value for this key cannot change. Exceptions to this rule
    * are to/from null or undefined. Otherwise if you try to change, say, `1` to `'2'`, a type error will occur (int to string is not permitted).
    */
-  set: function set(key_or_new_store, value) {
+  set: function set(key_or_new_store, value_or_updater) {
     if (arguments.length === 1) {
       // replace the whole store
       var new_store = key_or_new_store;
@@ -229,34 +233,57 @@ var store = {
       throw 'cannot create new key after initialization (attempted to create ' + key + ')';
     }
 
+    // Call middleware function
+    if (store._pipeline_middleware) {
+      store._pipeline_middleware(key, value_or_updater, store);
+    } else {
+      store._set(key, value_or_updater);
+    }
+  },
+  /**
+   * Sets the value in the store and call pre-update middleware functions
+   * Called as the last middleware function
+   */
+  _set: function _set(key, value_or_updater) {
     var oldval = store._store[key];
+
+    var value = value_or_updater;
+
+    if (isFunction(value_or_updater)) {
+      var update_state = value_or_updater;
+      value = update_state(store.get(key));
+    }
+
     checkTypeMatch(key, oldval, value);
     if (valueHasChanged(oldval, value)) {
-      var update_store = store._runUserMiddleware(key, oldval, value);
+      var update_store = store._runUserPreUpdateMiddleware(key, oldval, value);
       if (update_store) {
         store._store[key] = value;
         store._publishChangeToSubscribers(key, oldval, value);
       }
     }
   },
-  _user_middleware_functions: [],
+  /** list of middleware functiona that are called just before store is updated */
+  _user_pre_update_middleware_functions: [],
   /**
-   * use a middleware function
-   * function signature of middleware is function(key, oldval, newval).
+   * Set of middleware functions that get exececuted just before a the state is updated
+   * Function signature of middleware is function(key, oldval, newval).
    * If middleware functions returns true, next middleware function will run
    * otherwise, the middleware chain will stop and the store will NOT be updated.
    */
-  use: function use(new_middlware_function) {
-    store._user_middleware_functions.push(new_middlware_function);
+  use: function use() {
+    var _store$_user_pre_upda;
+
+    (_store$_user_pre_upda = store._user_pre_update_middleware_functions).push.apply(_store$_user_pre_upda, arguments);
   },
-  _runUserMiddleware: function _runUserMiddleware(key, oldval, newval) {
-    if (store._user_middleware_functions.length) {
+  _runUserPreUpdateMiddleware: function _runUserPreUpdateMiddleware(key, oldval, newval) {
+    if (store._user_pre_update_middleware_functions.length) {
       var _iteratorNormalCompletion3 = true;
       var _didIteratorError3 = false;
       var _iteratorError3 = undefined;
 
       try {
-        for (var _iterator3 = store._user_middleware_functions[Symbol.iterator](), _step3; !(_iteratorNormalCompletion3 = (_step3 = _iterator3.next()).done); _iteratorNormalCompletion3 = true) {
+        for (var _iterator3 = store._user_pre_update_middleware_functions[Symbol.iterator](), _step3; !(_iteratorNormalCompletion3 = (_step3 = _iterator3.next()).done); _iteratorNormalCompletion3 = true) {
           var middleware_function = _step3.value;
 
           var keep_going = middleware_function(key, oldval, newval);
@@ -280,6 +307,34 @@ var store = {
       }
     }
     return true;
+  },
+  _pipeline_middleware: null,
+  /**
+   * Set of middleware functions that get weaved into the state update pipeline
+   * Function signature is function(next, key, newValOrUpdator, store)
+   * The next middleware in the pipeline may be executing by invoking the next function or
+   * pipeline may be stopped by not calling the next function.
+   * The next function has the signature next(key, new_value_or_updator)
+   * Pipeline middleware functions allow the state value to modified prior to update
+   * or some effect to be invoked before or after update
+   */
+  apply: function apply() {
+    var next = store._set;
+
+    for (var _len = arguments.length, middleware_functions = Array(_len), _key = 0; _key < _len; _key++) {
+      middleware_functions[_key] = arguments[_key];
+    }
+
+    for (var i = middleware_functions.length - 1; i >= 0; i--) {
+      next = store._applyNextMiddleware(middleware_functions[i], next);
+    }
+
+    store._pipeline_middleware = next;
+  },
+  _applyNextMiddleware: function _applyNextMiddleware(middleware_function, next) {
+    return function (key, new_value_or_updater) {
+      return middleware_function(next, key, new_value_or_updater, store);
+    };
   },
   /**
    * Emit event to subscribers based on timeout rules
@@ -307,8 +362,8 @@ var store = {
     }
   },
   /**
-   * Get reference to one of the keys in the current store.
-   * @param {str} key of the store object to get a reference to
+   * Get reference or value to one of the keys in the current store.
+   * @param key of the store object to get a reference to
    * @return reference or new object (depending on `immutable` option)
    * NOTE: The store should *only* be update by calling `store.set(...)`
    *   Throws error if key does not exist in store.
@@ -501,7 +556,18 @@ function shallowEqual(objA, objB) {
   return true;
 }
 
+function isFunction(x) {
+  return Object.prototype.toString.call(x) == '[object Function]';
+}
+
+var _createComponents = (0, _ui.createComponents)(store),
+    Store = _createComponents.Store,
+    connectStore = _createComponents.connectStore;
+
 module.exports = {
   store: store,
-  middleware: _middleware.middleware
+  middleware: _middleware.middleware,
+  pipeline: _pipelineMiddleware.pipeline,
+  Store: Store,
+  connectStore: connectStore
 };

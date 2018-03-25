@@ -469,9 +469,12 @@ function isFunction(x) {
   return Object.prototype.toString.call(x) == '[object Function]'
 }
 
+const {Store, connectStore} = createComponents(store)
+
 module.exports = {
   store,
   middleware,
   pipeline,
-  ...createComponents(store),
+  Store,
+  connectStore,
 }
