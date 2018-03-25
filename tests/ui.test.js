@@ -1,17 +1,12 @@
 import React from 'react'
 import renderer from 'react-test-renderer'
 import {store, Store, connectStore} from '../src/statorgfc.js'
+import resetStore from './__reset-store'
 
 /* eslint-env jest */
 
 afterEach(() => {
-  store._store_created = false
-  store._store = {}
-  store._key_to_watcher_subscriptions = {}
-  store._callback_objs = []
-  store._cur_callback_id = 0
-  store._pipeline_middleware = null
-  store._user_pre_update_middleware_functions = []
+  resetStore(store)
 })
 
 test('Store component renders when state changes', () => {
@@ -25,7 +20,7 @@ test('Store component renders when state changes', () => {
 
   store.set('a', 2)
 
-  expect(func.mock.calls.length).toBe(2)
+  expect(func).toHaveBeenCalledTimes(2)
 })
 
 test('Hoc renders when state changes and maps props', () => {
@@ -41,7 +36,6 @@ test('Hoc renders when state changes and maps props', () => {
 
   store.set('a', 2)
 
-  expect(func.mock.calls.length).toBe(2)
-  expect(func.mock.calls[1][0]).toEqual(store.get())
-  expect(func.mock.calls[1][1]).toBe(3)
+  expect(func).toHaveBeenCalledTimes(2)
+  expect(func).toHaveBeenLastCalledWith(store.get(), 3)
 })

@@ -1,4 +1,4 @@
 module.exports = {
-    "verbose": true,
-    "testMatch": [__dirname  + '/tests/**']
+  verbose: true,
+  testMatch: [__dirname + '/tests/*.test.js'],
 }
